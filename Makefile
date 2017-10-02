@@ -1,10 +1,12 @@
 node := /Users/tim/Code/node
 cxx := clang++
-cxxflags := -stdlib=libc++ -std=gnu++11
+cxxflags := -stdlib=libc++ -std=gnu++11 -g
 
-all: embed node addon.node
+all: embed node addon.node hello
 
 #-L$(node)/out/Release
+#install_name_tool -change @rpath/libnode.51.dylib ./libnode.51.dylib embed
+
 embed: embed.cc
 	$(cxx) $(cxxflags) \
 		-I$(node)/target/include/node \
@@ -14,7 +16,6 @@ embed: embed.cc
 		-L. \
 		-lnode.57 \
 		embed.cc -o embed
-	#install_name_tool -change @rpath/libnode.51.dylib ./libnode.51.dylib embed
 
 node: node.cc
 	$(cxx) $(cxxflags) \
@@ -37,3 +38,11 @@ addon.node: addon.cc
 		-shared \
 		addon.cc -o addon.node
 
+hello: hello.cc
+	$(cxx) $(cxxflags) \
+		-I$(node)/deps/v8/include \
+		-I$(node)/deps/uv/include \
+		-I$(node)/src \
+		-L. \
+		-lnode.57 \
+		hello.cc -o hello
