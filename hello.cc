@@ -18,6 +18,17 @@ void operator=(const TypeName&)
 
 using namespace v8;
 
+
+
+static void LogCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  if (args.Length() < 1) return;
+  HandleScope scope(args.GetIsolate());
+  Local<Value> arg = args[0];
+  String::Utf8Value value(arg);
+  printf("%s\n", *value);
+  printf("dude you called my native\n");
+}
+
 int main(int argc, char* argv[]) {
 
     // init UV
@@ -55,8 +66,13 @@ int main(int argc, char* argv[]) {
         // Create a stack-allocated handle scope.
         HandleScope handle_scope(isolate);
 
+        // Create a template for the global object and set the
+        // built-in global functions.
+        Local<ObjectTemplate> global = ObjectTemplate::New(isolate);
+        global->Set(String::NewFromUtf8(isolate, "log"), FunctionTemplate::New(isolate, LogCallback));
+
         // Create a new context.
-        Local<Context> context = Context::New(isolate);
+        Local<Context> context = Context::New(isolate, NULL, global);
 
         // Enter the context for compiling and running the hello world script.
         Context::Scope context_scope(context);
