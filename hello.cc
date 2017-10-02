@@ -10,7 +10,7 @@
 #include <node.h>
 
 #define DISALLOW_COPY_AND_ASSIGN(TypeName) \
-TypeName(const TypeName&);                                 \
+TypeName(const TypeName&); \
 void operator=(const TypeName&)
 #include <node_platform.h>
 
@@ -19,18 +19,48 @@ void operator=(const TypeName&)
 using namespace v8;
 
 
+static Persistent<Function> moo;
 
-static void LogCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  if (args.Length() < 1) return;
-  HandleScope scope(args.GetIsolate());
-  Local<Value> arg = args[0];
-  String::Utf8Value value(arg);
-  printf("%s\n", *value);
-  printf("dude you called my native\n");
+
+static void ListenCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  Isolate* isolate = args.GetIsolate();
+
+  // Check the number of arguments passed.
+  if (args.Length() != 2 || !args[0]->IsString() || !args[1]->IsFunction()) {
+    isolate->ThrowException(Exception::TypeError(
+        String::NewFromUtf8(isolate, "Expected (String, Function)")));
+    return;
+  }
+
+  String::Utf8Value kind(args[0]);
+  Local<Function> cb = Local<Function>::Cast(args[1]);
+
+  printf("Listen: %s\n", *kind);
+  moo.Reset(isolate, cb);
 }
 
-int main(int argc, char* argv[]) {
+static void SendCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  Isolate* isolate = args.GetIsolate();
+    
+  if (args.Length() < 1) return;
+  HandleScope scope(args.GetIsolate());
+  //Local<Value> kind = args[0];
+  String::Utf8Value kind(args[0]);
+  printf("Send: %s\n", *kind);
 
+  Local<Function> f = Local<Function>::New(isolate, moo);
+
+  const unsigned argc = 1;
+  Local<Value> argv[argc] = { String::NewFromUtf8(isolate, "hello world") };
+
+  Local<Value> value = f->Call(isolate->GetCurrentContext()->Global(), argc, argv);
+  String::Utf8Value out(value);
+  printf("%s\n", *out);
+}
+
+
+
+extern "C" int main(int argc, char* argv[]) {
     // init UV
     argv = uv_setup_args(argc, argv);
     uv_loop_t* loop = uv_default_loop();
@@ -69,7 +99,10 @@ int main(int argc, char* argv[]) {
         // Create a template for the global object and set the
         // built-in global functions.
         Local<ObjectTemplate> global = ObjectTemplate::New(isolate);
-        global->Set(String::NewFromUtf8(isolate, "log"), FunctionTemplate::New(isolate, LogCallback));
+        Local<ObjectTemplate> electrinode = ObjectTemplate::New(isolate);
+        global->Set(String::NewFromUtf8(isolate, "Electrinode"), electrinode);
+        electrinode->Set(String::NewFromUtf8(isolate, "on"), FunctionTemplate::New(isolate, ListenCallback));
+        electrinode->Set(String::NewFromUtf8(isolate, "send"), FunctionTemplate::New(isolate, SendCallback));
 
         // Create a new context.
         Local<Context> context = Context::New(isolate, NULL, global);
@@ -103,7 +136,7 @@ int main(int argc, char* argv[]) {
             node::RunAtExit(env);
             
             node::FreeEnvironment(env);
-            node::FreeIsolateData(isolate_data); // ???
+            node::FreeIsolateData(isolate_data);
         }
     }
 
@@ -111,7 +144,8 @@ int main(int argc, char* argv[]) {
     isolate->Dispose();
     V8::Dispose();
     V8::ShutdownPlatform();
-    // TODO delete NodePlatform?
+    platform_->Shutdown(); // can't hurt
     delete create_params.array_buffer_allocator;
     return 0;
 }
+
